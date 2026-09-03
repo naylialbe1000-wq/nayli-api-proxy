@@ -1,3 +1,13 @@
+// netlify/functions/hotmart-webhook.js
+//
+// Recibe las notificaciones (webhook) que Hotmart envía cada vez que alguien
+// compra, cancela, le rechazan el pago, etc. Verifica que el aviso venga
+// realmente de Hotmart (usando el HOTMART_HOTTOK guardado como variable de
+// entorno) y guarda en Netlify Blobs si ese correo tiene o no acceso activo.
+//
+// Esta información la lee después la función auth.js para decidir si un
+// usuario puede registrarse / iniciar sesión en ImportaContent Pro.
+
 const { getStore } = require('@netlify/blobs');
 
 const GRANT_EVENTS = new Set([
@@ -39,6 +49,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: 'JSON inválido' };
   }
 
+  // --- 1. Verificar que el aviso venga realmente de Hotmart ---
   const receivedToken =
     payload.hottok ||
     event.headers?.['x-hotmart-hottok'] ||
@@ -56,6 +67,7 @@ exports.handler = async (event) => {
     return { statusCode: 401, body: 'No autorizado' };
   }
 
+  // --- 2. Leer los datos del evento ---
   const data = payload.data || {};
   const eventType = payload.event || 'UNKNOWN';
   const email = extractEmail(data);
@@ -71,7 +83,12 @@ exports.handler = async (event) => {
   if (GRANT_EVENTS.has(eventType)) status = 'active';
   else if (REVOKE_EVENTS.has(eventType)) status = 'canceled';
 
-  const store = getStore('hotmart-access');
+  // --- 3. Guardar el estado de acceso de ese correo ---
+  const store = getStore({
+    name: 'hotmart-access',
+    siteID: process.env.BLOBS_SITE_ID,
+    token: process.env.BLOBS_TOKEN,
+  });
   const key = email.toLowerCase().trim();
   const existing = (await store.get(key, { type: 'json' })) || {};
 
