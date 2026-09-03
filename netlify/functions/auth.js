@@ -1,3 +1,11 @@
+// netlify/functions/auth.js
+//
+// Reemplaza el registro/login que antes vivía solo en localStorage.
+// Antes de dejar registrarse o iniciar sesión, revisa en Netlify Blobs si
+// ese correo tiene una compra/suscripción ACTIVA según lo que reportó
+// Hotmart a través de hotmart-webhook.js. Si no tiene acceso activo, se
+// rechaza — así ya no se puede entrar sin haber pagado.
+
 const { getStore } = require('@netlify/blobs');
 const crypto = require('crypto');
 
@@ -45,8 +53,12 @@ exports.handler = async (event) => {
   }
 
   const key = email.toLowerCase().trim();
-  const accessStore = getStore('hotmart-access');
-  const usersStore = getStore('importacontent-users');
+  const blobsConfig = {
+    siteID: process.env.BLOBS_SITE_ID,
+    token: process.env.BLOBS_TOKEN,
+  };
+  const accessStore = getStore({ name: 'hotmart-access', ...blobsConfig });
+  const usersStore = getStore({ name: 'importacontent-users', ...blobsConfig });
 
   const access = await accessStore.get(key, { type: 'json' });
 
